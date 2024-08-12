@@ -1,0 +1,25 @@
+{
+  "name": "audio-merger",
+  "version": "1.0.0",
+  "description": "Takes multiple audio sources and merge them into one audio MediaStreamTrack.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "Sajad Jafari",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sajadjafari/audio-merger.git"
+  },
+  "keywords": [
+    "audio",
+    "audio merger",
+    "javascript",
+    "media stream"
+  ],
+  "bugs": {
+    "url": "https://github.com/sajadjafari/audio-merger/issues"
+  },
+  "homepage": "https://github.com/sajadjafari/audio-merger#readme"
+}
