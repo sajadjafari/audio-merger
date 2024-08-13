@@ -1,6 +1,6 @@
 {
   "name": "audio-merger",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Takes multiple audio sources and merge them into one audio MediaStreamTrack.",
   "main": "./dist/index.js",
   "module": "./dist/index.mjs",
