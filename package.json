@@ -2,8 +2,11 @@
   "name": "audio-merger",
   "version": "1.0.0",
   "description": "Takes multiple audio sources and merge them into one audio MediaStreamTrack.",
-  "main": "index.js",
+  "main": "./dist/index.js",
+  "module": "./dist/index.mjs",
+  "types": "./dist/index.d.ts",
   "scripts": {
+    "build": "tsup",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "author": "Sajad Jafari",
@@ -21,5 +24,10 @@
   "bugs": {
     "url": "https://github.com/sajadjafari/audio-merger/issues"
   },
-  "homepage": "https://github.com/sajadjafari/audio-merger#readme"
+  "homepage": "https://github.com/sajadjafari/audio-merger#readme",
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "tsup": "^8.2.4",
+    "typescript": "^5.5.4"
+  }
 }

@@ -1,12 +1,15 @@
+export interface IAudioMergerNode {
+    analyser: AnalyserNode;
+    audioData: Uint8Array;
+    mediaStream: MediaStreamAudioSourceNode | MediaElementAudioSourceNode;
+    gainNode: GainNode;
+}
+
 export default class AudioMerger {
-    // AudioContext
-    audioContext;
-    // DelayNode
-    videoSyncDelayNode;
-    // MediaStreamAudioDestinationNode
-    audioDestination;
-    // List of all added audio-sources
-    #sources = new Map();
+    readonly audioContext: AudioContext;
+    readonly videoSyncDelayNode: DelayNode;
+    public audioDestination: MediaStreamAudioDestinationNode;
+    readonly #sources = new Map<string, IAudioMergerNode>(); // List of all added audio-sources
 
     constructor() {
         this.audioContext = new AudioContext();
@@ -32,20 +35,20 @@ export default class AudioMerger {
         source.start();
     }
 
-    getContext() {
+    getContext(): AudioContext {
         return this.audioContext;
     }
 
-    getMediaStreamSource(streamId) {
+    getMediaStreamSource(streamId: string): IAudioMergerNode | undefined {
         return this.#sources.get(streamId);
     }
 
-    getSources() {
+    getSources(): Map<string, IAudioMergerNode> {
         return this.#sources;
     }
 
-    addSource(source) {
-        if (!(source.source instanceof MediaStream) && !(source.source instanceof HTMLMediaElement)) {
+    addSource(source: MediaStream | HTMLMediaElement) {
+        if (!(source instanceof MediaStream) && !(source instanceof HTMLMediaElement)) {
             return null;
         }
         const foundedStreamNode = this.#sources.get(source.id);
@@ -53,19 +56,19 @@ export default class AudioMerger {
             return foundedStreamNode;
         }
         const audioSource =
-            source.source instanceof MediaStream
-                ? this.audioContext.createMediaStreamSource(source.source)
-                : this.audioContext.createMediaElementSource(source.source);
+            source instanceof MediaStream
+                ? this.audioContext.createMediaStreamSource(source)
+                : this.audioContext.createMediaElementSource(source);
         const audioOutput = this.audioContext.createGain();
         const gainNode = audioSource.context.createGain();
 
         audioOutput.gain.value = 1;
-        gainNode.gain.setValueAtTime(source.volume / 100, audioSource.context.currentTime);
+        gainNode.gain.setValueAtTime(0.1, (audioSource.context as unknown as BaseAudioContext).currentTime);
         audioSource.connect(gainNode);
         gainNode.connect(audioOutput);
         audioOutput.connect(this.videoSyncDelayNode);
 
-        const node = {};
+        const node = {} as IAudioMergerNode;
         node.mediaStream = audioSource;
         node.analyser = this.audioContext.createAnalyser();
         node.analyser.fftSize = 256;
@@ -78,8 +81,8 @@ export default class AudioMerger {
         return node;
     }
 
-    removeSource(streamId) {
-        const streamNode = this.#sources.get(streamId);
+    removeSource(id: string) {
+        const streamNode = this.#sources.get(id);
         if (streamNode) {
             if (streamNode.mediaStream instanceof MediaStreamAudioSourceNode) {
                 streamNode.mediaStream.mediaStream.getTracks().forEach(track => {
@@ -87,24 +90,20 @@ export default class AudioMerger {
                 });
             }
             streamNode.mediaStream.disconnect(streamNode.analyser);
-            streamNode.mediaStream = null;
-            streamNode.analyser = null;
-            streamNode.audioData = null;
-            streamNode.gainNode = null;
-            this.list.delete(streamId);
+            this.#sources.delete(id);
         }
     }
 
-    updateVolume(streamId, volume) {
-        const context = this.getAudioContext();
-        const mediaSource = this.getMediaStreamSource(streamId);
+    updateVolume(id: string, volume: number) {
+        const context = this.getContext();
+        const mediaSource = this.getMediaStreamSource(id);
         if (context && mediaSource) {
             mediaSource.gainNode.gain.setValueAtTime(volume / 100, context.currentTime);
         }
     }
 
-    getVolumeInDecibels(streamId) {
-        const node = this.#sources.get(streamId);
+    getVolumeInDecibels(id: string) {
+        const node = this.#sources.get(id);
         if (node) {
             node.analyser.getByteFrequencyData(node.audioData);
             // Calculate the average amplitude of the audio signal
