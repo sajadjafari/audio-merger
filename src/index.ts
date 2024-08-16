@@ -1,15 +1,20 @@
 export interface IAudioMergerNode {
+    id: string;
+    name: string;
     analyser: AnalyserNode;
     audioData: Uint8Array;
-    mediaStream: MediaStreamAudioSourceNode | MediaElementAudioSourceNode;
+    audioSource: MediaStreamAudioSourceNode | MediaElementAudioSourceNode;
     gainNode: GainNode;
 }
 
 export default class AudioMerger {
-    readonly audioContext: AudioContext;
-    readonly videoSyncDelayNode: DelayNode;
+    private readonly audioContext: AudioContext;
+
+    private readonly videoSyncDelayNode: DelayNode;
+
     public audioDestination: MediaStreamAudioDestinationNode;
-    readonly #sources = new Map<string, IAudioMergerNode>(); // List of all added audio-sources
+
+    readonly #sources = new Map<string, IAudioMergerNode>();
 
     constructor() {
         this.audioContext = new AudioContext();
@@ -39,42 +44,53 @@ export default class AudioMerger {
         return this.audioContext;
     }
 
-    getMediaStreamSource(streamId: string): IAudioMergerNode | undefined {
-        return this.#sources.get(streamId);
+    getOutputStream(): MediaStream {
+        return this.audioDestination.stream;
     }
 
-    getSources(): Map<string, IAudioMergerNode> {
+    getSources(): Map<string, IAudioMergerNode>{
         return this.#sources;
     }
 
-    addSource(source: MediaStream | HTMLMediaElement) {
+    getSource(id: string): IAudioMergerNode | undefined {
+        return this.#sources.get(id);
+    }
+
+    addSource(name: string, source: MediaStream | HTMLMediaElement): IAudioMergerNode | null {
         if (!(source instanceof MediaStream) && !(source instanceof HTMLMediaElement)) {
+            console.warn('AudioMixer: You can only add MediaStream & HTMLMediaElement sources!');
             return null;
         }
         const foundedStreamNode = this.#sources.get(source.id);
-        if (foundedStreamNode !== undefined) {
+        if (foundedStreamNode) {
+            console.warn('AudioMixer: This source has been added before!', source.id);
             return foundedStreamNode;
         }
+
         const audioSource =
             source instanceof MediaStream
                 ? this.audioContext.createMediaStreamSource(source)
                 : this.audioContext.createMediaElementSource(source);
         const audioOutput = this.audioContext.createGain();
         const gainNode = audioSource.context.createGain();
+        const analyser = this.audioContext.createAnalyser();
 
         audioOutput.gain.value = 1;
-        gainNode.gain.setValueAtTime(0.1, (audioSource.context as unknown as BaseAudioContext).currentTime);
+        gainNode.gain.setValueAtTime(1, (audioSource.context as unknown as BaseAudioContext).currentTime);
         audioSource.connect(gainNode);
         gainNode.connect(audioOutput);
         audioOutput.connect(this.videoSyncDelayNode);
+        analyser.fftSize = 256;
+        audioSource.connect(analyser);
 
-        const node = {} as IAudioMergerNode;
-        node.mediaStream = audioSource;
-        node.analyser = this.audioContext.createAnalyser();
-        node.analyser.fftSize = 256;
-        node.audioData = new Uint8Array(node.analyser.frequencyBinCount);
-        node.gainNode = gainNode;
-        node.mediaStream.connect(node.analyser);
+        const node = {
+            id: source.id,
+            name,
+            audioSource,
+            analyser,
+            audioData: new Uint8Array(analyser.frequencyBinCount),
+            gainNode,
+        } as IAudioMergerNode;
 
         this.#sources.set(source.id, node);
 
@@ -82,21 +98,25 @@ export default class AudioMerger {
     }
 
     removeSource(id: string) {
-        const streamNode = this.#sources.get(id);
-        if (streamNode) {
-            if (streamNode.mediaStream instanceof MediaStreamAudioSourceNode) {
-                streamNode.mediaStream.mediaStream.getTracks().forEach(track => {
+        const {audioSource, analyser} = this.#sources.get(id) || {};
+        if (audioSource) {
+            if (audioSource instanceof MediaStream) {
+                audioSource.getTracks().forEach(track => {
                     track.stop();
                 });
             }
-            streamNode.mediaStream.disconnect(streamNode.analyser);
+            if (audioSource instanceof MediaElementAudioSourceNode) {
+                audioSource.mediaElement.pause();
+                audioSource.mediaElement.remove();
+            }
+            if (analyser) audioSource.disconnect(analyser);
             this.#sources.delete(id);
         }
     }
 
     updateVolume(id: string, volume: number) {
         const context = this.getContext();
-        const mediaSource = this.getMediaStreamSource(id);
+        const mediaSource = this.getSource(id);
         if (context && mediaSource) {
             mediaSource.gainNode.gain.setValueAtTime(volume / 100, context.currentTime);
         }
@@ -117,5 +137,15 @@ export default class AudioMerger {
             return val === -Infinity ? 0 : val;
         }
         return null;
+    }
+
+    destroy() {
+        // Remove all added sources
+        Array.from(this.#sources).map(([, source]) => this.removeSource(source.id));
+        // Destroy context and nodes
+        this.audioDestination.stream.getTracks().forEach((track: MediaStreamTrack) => track.stop());
+        this.audioDestination.disconnect();
+        this.videoSyncDelayNode.disconnect();
+        void this.audioContext.close();
     }
 }

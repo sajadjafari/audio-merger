@@ -8,7 +8,5 @@ node_modules/
 /coverage.data
 /coverage/
 
-# Build files
-/dist
-
+# Files
 package-lock.json
